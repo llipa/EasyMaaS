@@ -2,7 +2,10 @@ import functools
 import inspect
 import time
 import uuid
-from typing import Callable, Any, Dict, List, Optional, Union
+import logging
+import json
+from typing import Callable, Any, Dict, List, Optional, Union, Set, Type, Tuple
+from pydantic import BaseModel
 from .models import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -13,10 +16,14 @@ from .models import (
     StreamChoice
 )
 
+# 配置日志
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("EasyMaaS")
+
 class ServiceRegistry:
     _instance = None
     _services: Dict[str, Callable] = {}
-
+    
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -27,31 +34,21 @@ class ServiceRegistry:
         # 创建包装函数
         @functools.wraps(func)
         async def wrapper(request: ChatCompletionRequest) -> Union[ChatCompletionResponse, StreamChatCompletionResponse]:
-            # 获取函数参数
-            sig = inspect.signature(func)
-            params = {}
-            
-            # 处理参数映射
-            for param_name, param in sig.parameters.items():
-                if param_name == "content":
-                    # 获取最后一个user消息的content
-                    user_messages = [msg for msg in request.messages if msg.role == "user"]
-                    if user_messages:
-                        params[param_name] = user_messages[-1].content
-                elif param_name == "request":
-                    params[param_name] = request
-                else:
-                    # 尝试从request中获取对应参数
-                    if hasattr(request, param_name):
-                        params[param_name] = getattr(request, param_name)
-            
+            # 映射请求参数到函数参数
+            params = _map_request_to_params(func, request)
+
             # 调用原始函数
-            result = await func(**params) if inspect.iscoroutinefunction(func) else func(**params)
-            
-            # 处理响应
-            if request.stream:
-                return _create_stream_response(request, result)
-            return _create_response(request, result)
+            try:
+                result = await func(**params) if inspect.iscoroutinefunction(func) else func(**params)
+                
+                # 处理响应
+                if request.stream:
+                    return _create_stream_response(func, request, result)
+                return _create_response(func, request, result)
+            except Exception as e:
+                error_msg = f"\n{'='*80}\n❌ Error: Function '{func.__name__}' execution failed: {str(e)}\n{'='*80}"
+                logger.error(error_msg)
+                raise
         
         # 存储包装后的函数
         cls._services[model_name] = wrapper
@@ -78,108 +75,205 @@ def service(model_name: str, description: str = ""):
         return func
     return decorator
 
-def _create_response(request: ChatCompletionRequest, result: Any) -> ChatCompletionResponse:
-    """创建标准响应"""
-    # 生成响应ID和时间戳
-    response_id = str(uuid.uuid4())
-    created = int(time.time())
+def _find_key_in_json(json_obj: Any, target_key: str) -> Tuple[bool, Any]:
+    """
+    在JSON对象中递归查找指定的键
     
-    # 处理不同类型的返回值
-    if isinstance(result, dict):
-        # 如果返回字典，尝试从中提取字段
-        content = result.get("content", f"Hello from {request.model}")
-        role = result.get("role", "assistant")
-        finish_reason = result.get("finish_reason", "stop")
-        prompt_tokens = result.get("prompt_tokens", 0)
-        completion_tokens = result.get("completion_tokens", 0)
-        total_tokens = result.get("total_tokens", prompt_tokens + completion_tokens)
-    elif isinstance(result, list):
-        # 如果返回列表，将其作为choices
-        choices = []
-        for i, item in enumerate(result):
-            if isinstance(item, dict):
-                content = item.get("content", str(item))
-                role = item.get("role", "assistant")
-                finish_reason = item.get("finish_reason", "stop")
-            else:
-                content = str(item)
-                role = "assistant"
-                finish_reason = None
-            
-            message = Message(role=role, content=content)
-            choice = Choice(index=i, message=message, finish_reason=finish_reason)
-            choices.append(choice)
+    Args:
+        json_obj: JSON对象
+        target_key: 目标键名
         
-        # 计算token使用量（简化处理）
-        prompt_tokens = sum(len(msg.content.split()) for msg in request.messages)
-        completion_tokens = sum(len(choice.message.content.split()) for choice in choices)
-        total_tokens = prompt_tokens + completion_tokens
+    Returns:
+        Tuple[bool, Any]: (是否找到, 对应的值)
+    """
+    # 如果是字典，直接检查键
+    if isinstance(json_obj, dict):
+        # 直接匹配
+        if target_key in json_obj:
+            return True, json_obj[target_key]
         
-        return ChatCompletionResponse(
-            id=response_id,
-            created=created,
-            model=request.model,
-            choices=choices,
-            usage=Usage(
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                total_tokens=total_tokens
-            )
-        )
-    else:
-        # 其他类型，转换为字符串作为content
-        content = str(result)
-        role = "assistant"
-        finish_reason = None
-        # 计算token使用量（简化处理）
-        prompt_tokens = sum(len(msg.content.split()) for msg in request.messages)
-        completion_tokens = len(content.split())
-        total_tokens = prompt_tokens + completion_tokens
+        # 递归检查每个值
+        for key, value in json_obj.items():
+            found, result = _find_key_in_json(value, target_key)
+            if found:
+                return True, result
     
-    # 创建消息和选择
-    message = Message(role=role, content=content)
-    choice = Choice(index=0, message=message, finish_reason=finish_reason)
+    # 如果是列表，检查最后一个元素（如果是字典）
+    elif isinstance(json_obj, list) and json_obj:
+        last_item = json_obj[-1]
+        # 只处理列表中的字典元素
+        if isinstance(last_item, dict):
+            return _find_key_in_json(last_item, target_key)
     
-    return ChatCompletionResponse(
-        id=response_id,
-        created=created,
-        model=request.model,
-        choices=[choice],
-        usage=Usage(
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=total_tokens
-        )
-    )
+    # 未找到
+    return False, None
 
-def _create_stream_response(request: ChatCompletionRequest, result: Any) -> StreamChatCompletionResponse:
-    """创建流式响应"""
-    # 生成响应ID和时间戳
-    response_id = str(uuid.uuid4())
-    created = int(time.time())
+def _map_request_to_params(func: Callable, request: ChatCompletionRequest) -> Dict[str, Any]:
+    """
+    使用JSON递归映射请求参数到函数参数
+    
+    Args:
+        func: 要映射的函数
+        request: 请求对象
+        
+    Returns:
+        Dict[str, Any]: 映射后的参数字典
+    """
+    # 获取函数参数
+    sig = inspect.signature(func)
+    params = {}
+    
+    # 记录未映射的参数
+    unmapped_params = []
+    
+    # 将请求转换为JSON
+    request_json = request.model_dump()
+    
+    # 处理参数映射
+    for param_name, param in sig.parameters.items():
+        if param_name == "request":
+            # 特殊处理完整请求对象
+            params[param_name] = request
+        else:
+            # 在请求JSON中查找参数
+            found, value = _find_key_in_json(request_json, param_name)
+            if found:
+                params[param_name] = value
+            else:
+                # 无法映射的参数设置为None
+                params[param_name] = None
+                unmapped_params.append(param_name)
+    
+    # 如果有未映射的参数，发出警告
+    if unmapped_params:
+        warning_msg = f"\n{'='*80}\n⚠️ Warning: The following parameters of function '{func.__name__}' could not be mapped to the request and have been set to None: {', '.join(unmapped_params)}\n"
+        logger.warning(warning_msg)
+    
+    return params
+
+def _update_json_with_key(json_obj: Dict[str, Any], target_key: str, new_value: Any) -> bool:
+    """
+    递归更新JSON对象中指定键的值
+    
+    Args:
+        json_obj: JSON对象
+        target_key: 目标键名
+        new_value: 新值
+        
+    Returns:
+        bool: 是否成功更新
+    """
+    # 直接匹配
+    if target_key in json_obj:
+        json_obj[target_key] = new_value
+        return True
+    
+    # 递归检查每个值
+    for key, value in json_obj.items():
+        # 如果值是字典，递归处理
+        if isinstance(value, dict):
+            if _update_json_with_key(value, target_key, new_value):
+                return True
+        # 如果值是列表且元素为字典，处理最后一个元素
+        elif isinstance(value, list) and value:
+            last_item = value[-1]
+            if isinstance(last_item, dict):
+                if _update_json_with_key(last_item, target_key, new_value):
+                    return True
+    
+    # 未找到
+    return False
+
+def _create_response(func: Callable, request: ChatCompletionRequest, result: Any) -> ChatCompletionResponse:
+    """
+    使用JSON递归映射创建标准响应
+    
+    Args:
+        request: 请求对象
+        result: 函数返回值
+        
+    Returns:
+        ChatCompletionResponse: 响应对象
+    """
+    # 创建默认响应并转换为JSON
+    default_response = ChatCompletionResponse(model=request.model)
+    response_json = default_response.model_dump()
+    
+    # 计算提示tokens (如果需要)
+    prompt_tokens = sum(len(msg.content.split()) for msg in request.messages)
+    response_json["usage"]["prompt_tokens"] = prompt_tokens
     
     # 处理不同类型的返回值
-    if isinstance(result, dict):
-        content = result.get("content", f"Hello from {request.model}")
+    if result is None:
+        # 如果返回值为None，使用默认响应
+        logger.warning(f"\n{'='*80}\n⚠️ Warning: Function '{func.__name__}' returned None, using default response 'Hello from EasyMaaS'\n{'='*80}")
+        return default_response
+    
+    elif isinstance(result, str):
+        # 如果返回值为字符串，将其作为消息内容
+        response_json["choices"][0]["message"]["content"] = result
+    
     elif isinstance(result, list):
-        # 对于列表，只处理第一个元素
-        if result:
-            item = result[0]
-            if isinstance(item, dict):
-                content = item.get("content", str(item))
-            else:
-                content = str(item)
-        else:
-            content = ""
+        # 不支持列表返回值
+        logger.warning(f"\n{'='*80}\n⚠️ Warning: Function '{func.__name__}' does not support list type return values, using default response 'Hello from EasyMaaS'\n{'='*80}")
+        return default_response
+    
+    elif isinstance(result, dict):
+        # 如果返回值为字典，进行递归映射
+        for key, value in result.items():
+            # 尝试更新响应JSON
+            if not _update_json_with_key(response_json, key, value):
+                logger.warning(f"\n{'='*80}\n⚠️ Warning: Function '{func.__name__}' could not find a matching response key for return value {key}\n{'='*80}")
+    
     else:
-        content = str(result)
+        # 其他类型，转换为字符串
+        logger.warning(f"\n{'='*80}\n⚠️ Warning: Function '{func.__name__}' has an unsupported return value type {type(result).__name__}, converting to string\n{'='*80}")
+        return _create_response(request, str(result))
     
-    delta = {"content": content}
-    choice = StreamChoice(index=0, delta=delta)
+    # 使用更新后的JSON创建响应对象
+    return ChatCompletionResponse(**response_json)
+
+def _create_stream_response(func: Callable, request: ChatCompletionRequest, result: Any) -> StreamChatCompletionResponse:
+    """
+    使用JSON递归映射创建流式响应
     
-    return StreamChatCompletionResponse(
-        id=response_id,
-        created=created,
-        model=request.model,
-        choices=[choice]
-    ) 
+    Args:
+        request: 请求对象
+        result: 函数返回值
+        
+    Returns:
+        StreamChatCompletionResponse: 流式响应对象
+    """
+    # 创建默认响应并转换为JSON
+    default_response = StreamChatCompletionResponse(model=request.model)
+    response_json = default_response.model_dump()
+    
+    # 处理不同类型的返回值
+    if result is None:
+        # 如果返回值为None，使用默认响应
+        logger.warning(f"\n{'='*80}\n⚠️ Warning: Function '{func.__name__}' returned None, using default stream response 'Hello from EasyMaaS'\n{'='*80}")
+        return default_response
+    
+    elif isinstance(result, str):
+        # 如果返回值为字符串，将其作为消息内容
+        response_json["choices"][0]["delta"]["content"] = result
+    
+    elif isinstance(result, list):
+        # 不支持列表返回值
+        logger.warning(f"\n{'='*80}\n⚠️ Warning: Function '{func.__name__}' does not support list type stream return values, using default response 'Hello from EasyMaaS'\n{'='*80}")
+        return default_response
+    
+    elif isinstance(result, dict):
+        # 如果返回值为字典，进行递归映射
+        for key, value in result.items():
+            # 尝试更新响应JSON
+            if not _update_json_with_key(response_json, key, value):
+                logger.warning(f"\n{'='*80}\n⚠️ Warning: Function '{func.__name__}' could not find a matching response key for return value {key}\n{'='*80}")
+    
+    else:
+        # 其他类型，转换为字符串
+        logger.warning(f"\n{'='*80}\n⚠️ Warning: Function '{func.__name__}' has an unsupported stream return value type {type(result).__name__}, converting to string\n{'='*80}")
+        return _create_stream_response(request, str(result))
+    
+    # 使用更新后的JSON创建响应对象
+    return StreamChatCompletionResponse(**response_json)

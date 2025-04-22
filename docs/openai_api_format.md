@@ -18,11 +18,32 @@ def my_function(content: str):
 
 ### 自动参数映射
 
-EasyMaaS 会自动将 OpenAI API 请求中的参数映射到函数参数：
+EasyMaaS 使用递归JSON映射机制，自动将 OpenAI API 请求中的参数映射到函数参数，例如：
 
 1. `content` 参数会自动映射到最后一个用户消息的内容
 2. `request` 参数会接收完整的请求对象
 3. 其他参数会尝试从请求对象中获取对应属性
+
+### 参数验证
+EasyMaaS 会在服务运行时动态验证函数参数是否可以正确映射到请求：
+
+1. 在运行时，会记录未映射的参数并发出警告
+2. 系统会提供详细的错误信息，包括可用参数列表
+例如，如果函数包含无法映射的参数：
+
+```python
+@service(model_name="invalid-param-model")
+def invalid_param_function(content: str, invalid_param: str):
+    return f"Content: {content}, Invalid: {invalid_param}"
+```
+
+系统会生成类似以下的警告：
+
+```plaintext
+================================================================================
+⚠️ 警告: 函数 'invalid_param_function' 的以下参数无法映射到请求: invalid_param
+================================================================================
+```
 
 ### 支持的参数类型
 
@@ -65,13 +86,30 @@ def my_function(
        "total_tokens": 30
    }
    ```
-3. 列表：每个元素生成一个选择
-   ```python
-   [
-       {"content": "选项1", "role": "assistant"},
-       {"content": "选项2", "role": "assistant"}
-   ]
-   ```
+
+EasyMaaS使用递归JSON映射机制处理返回值，将函数返回的字典值映射到标准OpenAI响应格式中。这使得开发者可以灵活地控制响应的各个方面，而不必构建完整的响应对象。
+
+### 返回值验证
+
+EasyMaaS 会验证函数返回值是否符合预期格式：
+
+1. 返回值应为字符串或包含响应的键的字典
+2. 如果返回值格式不正确，系统会发出警告
+例如，如果函数返回不符合格式的字典：
+
+```python
+@service(model_name="invalid-return-model")
+def invalid_return_function(content: str):
+    return {"invalid_key": "value"}  # 缺少 content 键
+```
+
+系统会生成类似以下的警告：
+
+```plaintext
+================================================================================
+⚠️ 警告: 函数 'invalid_return_function' 的无法匹配到返回值 'invalid_key' 到响应
+================================================================================
+```
 
 ### 流式响应
 
@@ -136,14 +174,5 @@ async def stream_generator(content: str):
 
 1. 函数必须指定 `model_name`
 2. 建议提供函数描述
-3. 参数类型注解有助于自动映射
-4. 流式响应需要使用异步函数
-5. 返回值会被自动转换为 OpenAI 兼容格式
-
-## 最佳实践
-
-1. 使用类型注解提高可读性
-2. 为复杂函数提供详细文档
-3. 处理异常情况
-4. 合理使用异步函数
-5. 考虑性能优化
+3. 流式响应需要使用异步函数
+4. 返回值会被自动转换为 OpenAI 兼容格式

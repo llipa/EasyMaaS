@@ -20,12 +20,12 @@ EasyMaaS 是一个轻量级的Python库，用于将Python代码轻松包装成Op
 ## 安装
 
 ```bash
-# 使用pip安装
+# 使用 pip 安装
 git clone https://github.com/llipa/EasyMaaS.git
 cd EasyMaaS
 pip install -e .
 
-# 使用uv安装
+# 使用 uv 安装
 uv add --editable /path/to/EasyMaaS
 ```
 
@@ -37,7 +37,7 @@ uv add --editable /path/to/EasyMaaS
 # 创建项目
 mkdir your_project
 cd your_project
-uv init # 使用uv初始化
+uv init # 使用 uv 初始化
 
 # 使用 uv 安装
 uv add --editable /path/to/EasyMaaS
