@@ -1,163 +1,110 @@
 # CLI Command Reference
 
-## Overview
+EasyMaaS provides a complete set of command-line tools to help you easily create, manage, and deploy services. This document details all available commands and their usage, helping you quickly get started with EasyMaaS service management features.
 
-EasyMaaS provides a command-line interface (CLI) for managing services. This document describes all available commands and their usage.
+## Command Overview
+
+| Command | Description |
+|---------|-------------|
+| `easymaas init` | Initialize EasyMaaS project |
+| `easymaas start` | Start service |
+| `easymaas list-services` | List all available services |
+| `easymaas status` | View service status |
+
+Below is a detailed explanation and usage example for each command:
 
 ## Basic Commands
 
+### Initialize Project
+
+```bash
+easymaas init
+```
+
+This command will:
+- Create the `.easymaas` directory
+- Create the `services` directory
+- Create an example service file `example_service.py` in the `services` directory
+
 ### Start Service
 
-Start a service or multiple services:
-
 ```bash
-# Start all services
-easymaas start
-
-# Start a specific service
-easymaas start --service my-service
+easymaas start [OPTIONS]
 ```
 
 Options:
-- `--service`: Specify the service name to start
-- `--port`: Specify the port number (default: 8000)
-- `--host`: Specify the host address (default: 127.0.0.1)
-
-### Stop Service
-
-Stop a running service:
-
-```bash
-# Stop all services
-easymaas stop
-
-# Stop a specific service
-easymaas stop --service my-service
-```
-
-Options:
-- `--service`: Specify the service name to stop
+- `--host TEXT`: Server host address (default: "0.0.0.0")
+- `--port INTEGER`: Server port (default: 8000)
+- `--reload`: Enable auto-reload (development mode)
+- `--services-dir TEXT`: Service files directory (default: "services")
 
 ### List Services
 
-List all registered services:
-
 ```bash
-easymaas list
+easymaas list-services [OPTIONS]
 ```
 
-This command shows:
-- Service names
-- Descriptions
-- Status (running/stopped)
-- Port numbers
+Options:
+- `--services-dir TEXT`: Service files directory (default: "services")
+
+This command lists all available services in the specified directory.
+
+### View Service Status
+
+```bash
+easymaas status
+```
+
+This command displays:
+- All currently active deployments
+- Detailed information for each deployment:
+  - Deployment directory
+  - Host address
+  - Port number
+  - Process ID
+  - Running time
+  - List of included services
 
 ## Service Management
 
-### Register Service
+Service management is primarily done through the `services` directory:
 
-Register a new service:
+1. Create Python files in the `services` directory
+2. Define services using the `@service` decorator
+3. Start services using `easymaas start`
 
-```bash
-easymaas register --name my-service --path /path/to/service.py
+Example service file (`services/example_service.py`):
+
+```python
+from easymaas import service
+
+@service(model_name="example-model", description="An example service")
+def example_service(content: str):
+    return f"Processed: {content}"
 ```
 
-Options:
-- `--name`: Service name
-- `--path`: Path to the service file
-- `--description`: Service description (optional)
+## Deployment Management
 
-### Remove Service
+EasyMaaS automatically manages deployment information:
 
-Remove a registered service:
+- Deployment information is stored in the `.easymaas` directory
+- Automatically cleans up stopped deployments
+- Automatically detects port conflicts
+- Records service start time and process information
 
-```bash
-easymaas remove --service my-service
-```
+## Troubleshooting
 
-Options:
-- `--service`: Service name to remove
+If you encounter issues:
 
-### Update Service
+1. Check if the port is already in use
+2. Confirm that the service file format is correct
+3. Check if the service is correctly defined
+4. Use the `--reload` option for development debugging
 
-Update service configuration:
+## Notes
 
-```bash
-easymaas update --service my-service --description "New description"
-```
-
-Options:
-- `--service`: Service name to update
-- `--description`: New description (optional)
-- `--path`: New service file path (optional)
-
-## Configuration
-
-### Set Configuration
-
-Set global configuration:
-
-```bash
-easymaas config set --key log_level --value debug
-```
-
-Options:
-- `--key`: Configuration key
-- `--value`: Configuration value
-
-### Get Configuration
-
-Get global configuration:
-
-```bash
-easymaas config get --key log_level
-```
-
-Options:
-- `--key`: Configuration key to get
-
-### List Configuration
-
-List all configurations:
-
-```bash
-easymaas config list
-```
-
-## Examples
-
-### Basic Usage
-
-```bash
-# Register a service
-easymaas register --name echo --path ./services/echo.py
-
-# Start the service
-easymaas start --service echo
-
-# List services
-easymaas list
-
-# Stop the service
-easymaas stop --service echo
-```
-
-### Advanced Usage
-
-```bash
-# Register multiple services
-easymaas register --name service1 --path ./services/service1.py
-easymaas register --name service2 --path ./services/service2.py
-
-# Start all services
-easymaas start
-
-# Update service configuration
-easymaas update --service service1 --description "Updated description"
-
-# Set global configuration
-easymaas config set --key log_level --value info
-
-# List all configurations
-easymaas config list
-``` 
+1. Service files must be placed in the `services` directory
+2. Services must use the `@service` decorator
+3. Services must specify `model_name`
+4. It is recommended to use the `--reload` option during development
+5. For production environments, it is recommended to use configuration files to manage services

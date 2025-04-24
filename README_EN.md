@@ -1,24 +1,32 @@
-# EasyMaaS: Making AI Service Deployment Easy
+# EasyMaaS: Easily Build OpenAI-Compatible AI Services
 
-EasyMaaS is a lightweight Python library that makes it easy to wrap Python code into OpenAI-compatible services. It provides a simple and flexible way to create and manage AI services, supporting rapid deployment and integration.
+[English](./README_EN.md) | [中文](./README.md)
 
-## Core Features
+## What is EasyMaaS
 
-- 🚀 Quickly convert Python functions to OpenAI-compatible API services
-- 📦 Built-in CLI tools for simplified service management
-- 🔌 Automatic OpenAI API format mapping
-- 🛠️ Support for both async and sync functions
-- 🌊 Streaming response support
-- 🔄 Flexible request/response mapping configuration
-- 📝 Comprehensive logging and error handling
+EasyMaaS is a lightweight Python framework designed for AI developers, enabling you to convert ordinary Python functions into fully OpenAI API-compatible services with minimal effort. Through simple decorator syntax, you can focus on core business logic without dealing with complex API format conversion work.
 
-## Request/Response Mapping Mechanism
+```python
+# One line of code to easily create an OpenAI-compatible service
+@service(model_name="my-model", map_response=True)
+def my_service(content: str):
+    return f"Processing result: {content}"
+```
 
-The core functionality of EasyMaaS is to map complex multi-layer request structures into flat function parameters, and map flat function return values back into multi-layer responses that conform to the OpenAI API format. This mechanism allows developers to focus on business logic rather than dealing with complex API format conversions.
+## Why Choose EasyMaaS
 
-[View detailed usage guide](docs/en/usage_guide.md)
+In current AI service development, developers often spend significant time handling API format conversions and parameter mapping. EasyMaaS was created to solve this pain point, offering:
 
-## Installation
+- 🚀 **Minimalist Development Experience**: Create complete OpenAI-compatible services with just one line of code using decorator syntax
+- 🔌 **Intelligent Parameter Mapping**: Automatically handle complex request parameter extraction and response format conversion
+- 🌊 **Native Streaming Support**: Easily implement ChatGPT-like typewriter effect output
+- 🔄 **Flexible Configuration Options**: Customize request/response mapping behavior according to your needs
+- 🛠️ **Full-Stack Function Support**: Support both synchronous and asynchronous functions for various development scenarios
+- 📦 **Convenient Service Management**: Built-in CLI tools to simplify service registration, deployment, and management
+
+## Quick Start
+
+### Installation
 
 ```bash
 # Install using pip
@@ -26,107 +34,148 @@ git clone https://github.com/llipa/EasyMaaS.git
 cd EasyMaaS
 pip install -e .
 
-# Install using uv
+# Or install using uv
 uv add --editable /path/to/EasyMaaS
 ```
 
-## Quick Start
+### Create Your First Service
 
 1. Create a project (recommended using uv)
 
 ```bash
-# Create project
+# Create project directory
 mkdir your_project
 cd your_project
-uv init # Initialize with uv
+uv init  # Initialize project with uv
 
-# Install using uv
+# Install EasyMaaS
 uv add --editable /path/to/EasyMaaS
 ```
 
-2. Create a service with streaming support:
+2. Create a simple service
 
 ```python
+# app.py
 from easymaas import service
 
 @service(
-    model_name="example-model",
-    description="An example service",
-    map_request=True,
-    map_response=True,
-    supports_streaming=True
+    model_name="greeting-service",  # Model name, required parameter
+    description="A simple greeting service",  # Service description, optional
+    map_request=True,             # Enable automatic request mapping
+    map_response=True             # Enable automatic response mapping
 )
-async def example_service(content: str):
-    for word in content.split():
-        yield {"content": word}
+def greeting(content: str = ""):
+    """A simple greeting service"""
+    if not content:
+        return "Hello! How can I help you?"
+    
+    if "hello" in content.lower():
+        return "Hello! I'm happy to serve you."
+    elif "name" in content.lower():
+        return "I'm an AI assistant powered by EasyMaaS, nice to meet you!"
+    else:
+        return f"I received your message: {content}. How can I help you?"
 ```
 
-3. Start the service:
+3. Start the service
 
 ```bash
+# Start the service (default port 8000)
+python -m easymaas.cli.commands start
+
+# Or specify a port
+python -m easymaas.cli.commands start --port 3000
+
+# Directly use the easymaas command-line tool (default port 8000)
 easymaas start
+
+# Or specify a port
+easymaas start --port 3000
 ```
 
-4. Use the service:
+4. Call the service
+
+```bash
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "greeting-service",
+    "messages": [
+      {"role": "user", "content": "Hello, what's your name?"}
+    ]
+  }'
+```
+
+## Core Features
+
+### Intelligent Parameter Mapping
+
+The core functionality of EasyMaaS is its intelligent parameter mapping mechanism, which can:
+
+- **Automatically Extract Parameters**: Extract function parameters from complex nested JSON requests
+- **Flexible Response Conversion**: Automatically convert simple return values to standard OpenAI response format
+- **Recursive Mapping Processing**: Intelligently handle various data types and nested structures
+
+This mapping mechanism allows you to focus on business logic without dealing with tedious format conversion work.
+
+### Streaming Response Support
+
+EasyMaaS natively supports streaming responses, making it easy to implement ChatGPT-like typewriter effects:
 
 ```python
-from openai import OpenAI
+import asyncio
+from easymaas import service
 
-client = OpenAI(
-    base_url="http://127.0.0.1:8000/v1",
-    api_key="xxx"
+@service(
+    model_name="stream-demo",
+    map_response=True,
+    supports_streaming=True  # Enable streaming response support
 )
-
-response = client.chat.completions.create(
-    model="example-model",
-    messages=[
-        {
-            "role": "user",
-            "content": "test EasyMaaS."
-        }
-    ],
-    stream=True
-)
-
-for chunk in response:
-    print(chunk.choices[0].delta.content)
+async def stream_service(request):
+    # Extract content from request
+    messages = request.get("messages", [])
+    content = messages[-1].get("content", "") if messages else ""
+    
+    # Output response character by character
+    response = f"Your input is: {content}\nThis is a streaming response example..."
+    for char in response:
+        yield char  # Generate one character at a time
+        await asyncio.sleep(0.05)  # Simulate typing effect
 ```
 
-## Documentation
+## Advanced Usage
 
-- [Usage Guide](docs/en/usage_guide.md) - Comprehensive examples and best practices
-- [Why Choose EasyMaaS](docs/en/why_easymaas.md) - Learn about project background, advantages, and use cases
-- [OpenAI API Format Mapping](docs/en/openai_api_format.md) - Learn how to map Python functions to OpenAI-compatible services
-- [CLI Command Reference](docs/en/cli_reference.md) - View all available command-line tools
+### Request Mapping Modes
 
-## Project Structure
+EasyMaaS provides two request mapping modes:
 
-```
-easymaas/
-├── src/
-│   └── easymaas/
-│       ├── core/          # Core functionality modules
-│       ├── server/        # Server implementation
-│       ├── cli/           # Command-line tools
-│       └── config/        # Configuration management
-├── examples/              # Example services
-└── docs/                  # Documentation
-```
+1. **Automatic Mapping** (`map_request=True`): Automatically extract fields from the request that match function parameter names
+2. **Manual Mapping** (`map_request=False`, default): Pass the entire request object to the function's first parameter
 
-## Contributing
+### Response Mapping Modes
 
-We welcome all forms of contributions! You can also submit your valuable feedback through Issues.
+Similarly, EasyMaaS also provides two response mapping modes:
+
+1. **Automatic Mapping** (`map_response=True`): Automatically convert function return values to OpenAI format responses
+2. **Manual Mapping** (`map_response=False`, default): Function needs to return complete OpenAI format responses
+
+## Documentation and Resources
+
+- [Detailed Usage Guide](docs/en/usage_guide.md)
+- [OpenAI API Format Specification](docs/en/openai_api_format.md)
+- [CLI Command Reference](docs/en/cli_reference.md)
+- [Why Choose EasyMaaS](docs/en/why_easymaas.md)
+
+## Contributions and Feedback
+
+EasyMaaS is an open-source project, and we welcome contributions and feedback in any form. If you have any questions or suggestions, please submit them through GitHub Issues.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+EasyMaaS is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-## Contact
-
-If you have any questions or suggestions, please contact us through:
-- GitHub Issues
-- Project maintainer email
-
-## Acknowledgments
-
-Thanks to all developers who have contributed to this project!
+## TODO
+- [x] Support custom response templates
+- [x] Support API key validation
+- [x] Support custom mapping mechanisms
+- [x] Support quick integration with existing projects

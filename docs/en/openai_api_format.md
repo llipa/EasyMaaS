@@ -1,66 +1,20 @@
 # OpenAI API Format Mapping Specification
 
-EasyMaaS supports mapping Python functions to OpenAI-compatible API services. This document details the supported function types and parameter mapping rules.
+EasyMaaS provides a powerful parameter mapping mechanism that can automatically handle request and response format conversions. This document focuses on describing the specific rules and behaviors of parameter mapping.
 
-## API Endpoints
+## Request Parameter Mapping
 
-EasyMaaS provides the following API endpoints:
+When automatic request mapping is enabled (`map_request=True`), EasyMaaS recursively traverses the entire request JSON structure, looking for key-value pairs that match function parameter names. Regardless of which level the parameters are at in the request, as long as the names match, they will be automatically extracted and passed to the function.
 
-1. `POST /v1/chat/completions` - Handle chat completion requests
-   - Request format: OpenAI-compatible chat completion request
-   - Response format: Standard or streaming response based on service configuration
+For example, if the function is defined as `def my_func(content: str, temperature: float)`, the system will automatically search for fields named "content" and "temperature" in the request, regardless of where they are located in the request body.
 
-2. `GET /v1/models` - List all available models
-   - Response format: List of all registered models
+## Response Parameter Mapping
 
-## Service Registration
+Response mapping follows predefined template structures (refer to templates.py), and only fields defined in the template will be automatically mapped. This means that even if the dictionary returned by the function contains additional fields, these fields will not appear in the final response unless they are explicitly included in the template.
 
-Use the `@service` decorator to convert functions into services:
+Currently supported response templates include standard response and streaming response formats, with specific field definitions as follows:
 
-```python
-from easymaas import service
-
-@service(model_name="my-model", description="My custom service")
-def my_function(content: str):
-    return f"Processed: {content}"
-```
-
-## Service Configuration Options
-
-The `@service` decorator supports the following configuration options:
-
-```python
-@service(
-    model_name="my-model",          # Model name
-    description="My service",       # Service description
-    map_request=True,               # Automatically map request parameters
-    map_response=True,              # Automatically map response format
-    supports_streaming=True         # Support streaming responses
-)
-```
-
-## Request Handling
-
-### Parameter Mapping
-
-EasyMaaS uses a recursive JSON mapping mechanism to automatically map parameters from OpenAI API requests to function parameters:
-
-1. If `map_request=True`, the system recursively searches for keys in the request JSON that match function parameter names
-2. If `map_request=False`, the request data is passed as a dictionary to the first function parameter
-
-### Parameter Validation
-
-The system validates function parameters at runtime:
-1. Logs warnings for unmapped parameters
-2. Raises ValueError if the function has no parameters
-
-## Response Handling
-
-### Response Templates
-
-EasyMaaS uses the following response templates:
-
-1. Standard response template:
+### Standard Response Template
 ```python
 {
     "id": "uuid",
@@ -85,7 +39,7 @@ EasyMaaS uses the following response templates:
 }
 ```
 
-2. Streaming response template:
+### Streaming Response Template
 ```python
 {
     "id": "uuid",
@@ -105,27 +59,10 @@ EasyMaaS uses the following response templates:
 }
 ```
 
-### Return Value Handling
+## Return Value Handling
 
-Functions can return the following value types:
-1. String: Directly used as response content
-2. Dictionary: Recursively mapped to response template
-3. Generator: Used for streaming responses
+Functions can return the following types of values, and the system will automatically select the appropriate mapping strategy based on the return value type:
 
-## Error Handling
-
-EasyMaaS provides comprehensive error handling:
-1. Model not found: Returns 404 error
-2. Parameter mapping failure: Logs warnings
-3. Function execution error: Logs error and raises exception
-4. Streaming response error: Sends error message and terminates stream
-
-## Logging
-
-The system uses the standard logging module to record:
-1. Service registration information
-2. Parameter mapping warnings
-3. Function execution errors
-4. Streaming response status
-
-Log format: `%(asctime)s - %(name)s - %(levelname)s - %(message)s`
+1. **String**: Directly used as response content (message.content or delta.content)
+2. **Dictionary**: Recursively finds and updates corresponding fields in the response template
+3. **Generator**: Used for streaming responses, each generated chunk is converted to the standard streaming response format

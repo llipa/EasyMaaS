@@ -95,21 +95,22 @@ def init():
         click.echo("Created .easymaas directory")
     
     # 创建services目录
-    services_dir = Path("services")
-    if not services_dir.exists():
-        services_dir.mkdir()
-        click.echo("Created services directory")
+    if click.confirm("Do you want to create a example service?", default=False):
+        services_dir = Path("services")
+        if not services_dir.exists():
+            services_dir.mkdir()
+            click.echo("Created services directory")
     
-    # 创建示例服务文件
-    example_service = services_dir / "example_service.py"
-    if not example_service.exists():
-        example_service.write_text("""from easymaas import service
+        # 创建示例服务文件
+        example_service = services_dir / "example_service.py"
+        if not example_service.exists():
+            example_service.write_text("""from easymaas import service
 
-@service(model_name="example-model", description="An example service")
-def example_service(content: str):
-    return f"Processed: {content}"
+@service(model_name="example-model", description="An example service", map_request=True, map_response=True)
+def example_service(model:str, content: str):
+    return f"{model} received your message: {content}."
 """)
-        click.echo("Created example service in services/example_service.py")
+            click.echo("Created example service in services/example_service.py")
     
     click.echo("Project initialized successfully!")
 
@@ -137,7 +138,7 @@ def start(host: str, port: int, reload: bool, services_dir: str):
     display_services(services)
     
     # 确认是否继续
-    if not click.confirm("Do you want to start the server with these services?"):
+    if not click.confirm("Do you want to start the server with these services?", default=True):
         click.echo("Server startup cancelled.")
         sys.exit(0)
     
