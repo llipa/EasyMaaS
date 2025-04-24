@@ -8,7 +8,7 @@ EasyMaaS is a lightweight Python framework designed for AI developers, enabling 
 
 ```python
 # One line of code to easily create an OpenAI-compatible service
-@service(model_name="my-model", map_response=True)
+@service(model_name="my-model", map_request=True, map_response=True)
 def my_service(content: str):
     return f"Processing result: {content}"
 ```

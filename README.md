@@ -8,7 +8,7 @@ EasyMaaS是一个轻量级Python框架，专为AI开发者设计，能够以极�
 
 ```python
 # 一行代码，轻松创建OpenAI兼容服务
-@service(model_name="my-model", map_response=True)
+@service(model_name="my-model", map_request=True, map_response=True)
 def my_service(content: str):
     return f"处理结果: {content}"
 ```
