@@ -2,18 +2,21 @@
 
 EasyMaaS is a lightweight Python library that makes it easy to wrap Python code into OpenAI-compatible services. It provides a simple and flexible way to create and manage AI services, supporting rapid deployment and integration.
 
-In AI application development, we often need to encapsulate local models or business logic into API services. OpenAI's API format has become a de facto standard due to its simplicity and widespread use. However, implementing complete OpenAI API compatibility for each service is a repetitive and tedious task. EasyMaaS was born to solve this problem, allowing developers to focus on business logic rather than repeatedly implementing API format conversion.
-
-If you have functions or models that you want to encapsulate into OpenAI-format APIs, EasyMaaS can help you quickly wrap them and provide one-click deployment methods.
-
-[Learn more about project background and motivation](docs/en/why_easymaas.md)
-
-## Features
+## Core Features
 
 - 🚀 Quickly convert Python functions to OpenAI-compatible API services
 - 📦 Built-in CLI tools for simplified service management
 - 🔌 Automatic OpenAI API format mapping
 - 🛠️ Support for both async and sync functions
+- 🌊 Streaming response support
+- 🔄 Flexible request/response mapping configuration
+- 📝 Comprehensive logging and error handling
+
+## Request/Response Mapping Mechanism
+
+The core functionality of EasyMaaS is to map complex multi-layer request structures into flat function parameters, and map flat function return values back into multi-layer responses that conform to the OpenAI API format. This mechanism allows developers to focus on business logic rather than dealing with complex API format conversions.
+
+[View detailed usage guide](docs/en/usage_guide.md)
 
 ## Installation
 
@@ -41,14 +44,21 @@ uv init # Initialize with uv
 uv add --editable /path/to/EasyMaaS
 ```
 
-2. Create a simple service:
+2. Create a service with streaming support:
 
 ```python
 from easymaas import service
 
-@service(model_name="example-model", description="An example service")
-def example_service(content: str):
-    return f"Processed: {content}"
+@service(
+    model_name="example-model",
+    description="An example service",
+    map_request=True,
+    map_response=True,
+    supports_streaming=True
+)
+async def example_service(content: str):
+    for word in content.split():
+        yield {"content": word}
 ```
 
 3. Start the service:
@@ -74,14 +84,17 @@ response = client.chat.completions.create(
             "role": "user",
             "content": "test EasyMaaS."
         }
-    ]
+    ],
+    stream=True
 )
 
-print(response.choices[0].message.content)
+for chunk in response:
+    print(chunk.choices[0].delta.content)
 ```
 
 ## Documentation
 
+- [Usage Guide](docs/en/usage_guide.md) - Comprehensive examples and best practices
 - [Why Choose EasyMaaS](docs/en/why_easymaas.md) - Learn about project background, advantages, and use cases
 - [OpenAI API Format Mapping](docs/en/openai_api_format.md) - Learn how to map Python functions to OpenAI-compatible services
 - [CLI Command Reference](docs/en/cli_reference.md) - View all available command-line tools

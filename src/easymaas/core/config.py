@@ -5,6 +5,7 @@ import yaml
 import os
 import time
 import psutil
+import hashlib  # 添加 hashlib 模块
 
 class ServiceInfo(BaseModel):
     """服务信息"""
@@ -30,15 +31,16 @@ class DeploymentManager:
     
     def get_deployment_file(self, services_dir: str) -> Path:
         """获取部署信息文件路径"""
-        # 使用服务目录的绝对路径的哈希作为文件名
-        dir_hash = str(abs(hash(str(Path(services_dir).absolute()))))
+        # 使用服务目录的绝对路径的MD5哈希作为文件名，确保跨会话一致性
+        abs_path = str(Path(services_dir).absolute())
+        dir_hash = hashlib.md5(abs_path.encode()).hexdigest()[:10]  # 取前10位足够区分
         return self.easymaas_dir / f"deployment_{dir_hash}.yaml"
     
     def save_deployment(self, info: DeploymentInfo):
         """保存部署信息"""
         deployment_file = self.get_deployment_file(info.services_dir)
         with open(deployment_file, "w", encoding="utf-8") as f:
-            yaml.dump(info.dict(), f)
+            yaml.dump(info.model_dump(), f)
     
     def load_deployment(self, services_dir: str) -> Optional[DeploymentInfo]:
         """加载部署信息"""
@@ -77,4 +79,4 @@ class DeploymentManager:
                 if not process.is_running():
                     self.delete_deployment(deployment.services_dir)
             except psutil.NoSuchProcess:
-                self.delete_deployment(deployment.services_dir) 
+                self.delete_deployment(deployment.services_dir)

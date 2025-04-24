@@ -26,6 +26,22 @@ This design keeps the code clean while automatically handling complex parameter 
 
 In terms of service management, EasyMaaS provides simple CLI tools to help developers manage multiple services in a project. It creates a `.easymaas` directory in the project root to store service information and deployment status, making service management simple and unified.
 
+## New Features
+
+The latest version of EasyMaaS introduces the following new features:
+
+1. **Flexible Request/Response Mapping**
+   - Use `map_request` and `map_response` options to control automatic parameter and response format mapping
+   - Support custom mapping logic to meet different scenario requirements
+
+2. **Streaming Response Support**
+   - Support generator functions for streaming responses
+   - Automatically handle streaming response format conversion to ensure OpenAI compliance
+
+3. **Enhanced Error Handling**
+   - Provide detailed error messages and warnings to help developers quickly identify issues
+   - Automatically handle exceptions to ensure service stability
+
 ## Use Cases
 
 EasyMaaS is particularly suitable for the following scenarios:
@@ -38,18 +54,3 @@ EasyMaaS is particularly suitable for the following scenarios:
 
 3. **Rapid Prototyping**
    In the early stages of development, you may need to quickly validate ideas or test model performance. EasyMaaS's simple design allows you to quickly deploy services for testing and iteration.
-
-4. **Microservices Architecture**
-   If your project contains multiple services, EasyMaaS can help you manage them uniformly. It supports deploying multiple services simultaneously and provides a unified management interface.
-
-## Future Outlook
-
-EasyMaaS will continue to maintain its lightweight and user-friendly characteristics while planning improvements in the following areas:
-
-1. Support for more API formats, giving developers more choices
-2. Enhanced monitoring and logging capabilities for better operational support
-3. More deployment options to adapt to different scenario requirements
-4. Performance optimization and resource usage improvements to enhance service efficiency
-5. Expanded community support with more examples and best practices
-
-EasyMaaS aims to become the preferred tool for Python developers to encapsulate API services, allowing developers to focus on business logic rather than repeatedly implementing API format conversion. 

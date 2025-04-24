@@ -1,7 +1,7 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 import inspect
-from ..core.models import ChatCompletionRequest, ChatCompletionResponse, StreamChatCompletionResponse
 from ..core.decorators import ServiceRegistry
 
 app = FastAPI(
@@ -19,21 +19,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
-async def chat_completion(request: ChatCompletionRequest):
+@app.post("/v1/chat/completions")
+async def chat_completion(request: Request):
     """处理聊天完成请求"""
-    service = ServiceRegistry.get_service(request.model)
+    # 获取原始请求数据
+    request_data = await request.json()
+    model_name = request_data.get("model", "")
+    
+    service = ServiceRegistry.get_service(model_name)
     if not service:
         raise HTTPException(
             status_code=404,
-            detail=f"Model {request.model} not found. Available models: {', '.join(ServiceRegistry.list_services())}"
+            detail=f"Model {model_name} not found. Available models: {', '.join(ServiceRegistry.list_services())}"
         )
     
-    # 根据服务函数类型决定是否使用await
-    if inspect.iscoroutinefunction(service):
-        return await service(request)
-    else:
-        return service(request)
+    # 直接传递原始请求数据给服务
+    response = await service(request_data) if inspect.iscoroutinefunction(service) else service(request_data)
+    
+    # 检查响应是否已经是StreamingResponse
+    if isinstance(response, StreamingResponse):
+        return response
+    
+    # 返回普通JSON响应
+    return response
 
 @app.get("/v1/models")
 async def list_models():
@@ -49,4 +57,4 @@ async def list_models():
             }
             for model_name in ServiceRegistry.list_services()
         ]
-    } 
+    }
